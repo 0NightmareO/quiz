@@ -8,6 +8,7 @@ from django.conf import settings
 from datetime import date, timedelta
 from quiz import models as QMODEL
 from student import models as SMODEL
+from student import forms as SFORM
 from quiz import forms as QFORM
 
 
@@ -57,6 +58,45 @@ def teacher_dashboard_view(request):
 def teacher_exam_view(request):
     return render(request,'teacher/teacher_exam.html')
 
+@login_required(login_url='teacherlogin')
+def teacher_student_view(request):
+    dict={
+    'total_student':SMODEL.Student.objects.all().count(),
+    }
+    return render(request,'teacher/teacher_student.html',context=dict)
+
+@login_required(login_url='teacherlogin')
+def teacher_view_student_view(request):
+    students= SMODEL.Student.objects.all()
+    return render(request,'teacher/teacher_view_student.html',{'students':students})
+
+@login_required(login_url='teacherlogin')
+def update_student_view(request,pk):
+    student=SMODEL.Student.objects.get(id=pk)
+    user=SMODEL.User.objects.get(id=student.user_id)
+    userForm=SFORM.StudentUserForm(instance=user)
+    studentForm=SFORM.StudentForm(request.FILES,instance=student)
+    mydict={'userForm':userForm,'studentForm':studentForm}
+    if request.method=='POST':
+        userForm=SFORM.StudentUserForm(request.POST,instance=user)
+        studentForm=SFORM.StudentForm(request.POST,request.FILES,instance=student)
+        if userForm.is_valid() and studentForm.is_valid():
+            user=userForm.save()
+            user.set_password(user.password)
+            user.save()
+            studentForm.save()
+            return redirect('teacher-view-student')
+    return render(request,'quiz/update_student.html',context=mydict)
+
+
+
+@login_required(login_url='teacherlogin')
+def delete_student_view(request,pk):
+    student=SMODEL.Student.objects.get(id=pk)
+    user=User.objects.get(id=student.user_id)
+    user.delete()
+    student.delete()
+    return HttpResponseRedirect('/teacher/teacher-view-student')
 
 @login_required(login_url='teacherlogin')
 @user_passes_test(is_teacher)
@@ -122,3 +162,26 @@ def remove_question_view(request,pk):
     question=QMODEL.Question.objects.get(id=pk)
     question.delete()
     return HttpResponseRedirect('/teacher/teacher-view-question')
+
+
+@login_required(login_url='teacherlogin')
+def teacher_view_student_marks_view(request):
+    students= SMODEL.Student.objects.all()
+    return render(request,'teacher/teacher_view_student_marks.html',{'students':students})
+
+@login_required(login_url='teacherlogin')
+def teacher_view_marks_view(request,pk):
+    courses = models.Course.objects.all()
+    response =  render(request,'quiz/teacher_view_marks.html',{'courses':courses})
+    response.set_cookie('student_id',str(pk))
+    return response
+
+@login_required(login_url='teacherlogin')
+def teacher_check_marks_view(request,pk):
+    course = models.Course.objects.get(id=pk)
+    student_id = request.COOKIES.get('student_id')
+    student= SMODEL.Student.objects.get(id=student_id)
+
+    results= models.Result.objects.all().filter(exam=course).filter(student=student)
+    return render(request,'teacher/teacher_check_marks.html',{'results':results})
+    
